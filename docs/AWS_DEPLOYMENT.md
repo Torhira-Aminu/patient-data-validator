@@ -99,4 +99,4 @@ sam delete --stack-name pdv-demo --region us-east-1
 
 **Performance finding (not hidden):** both runs were cold starts and took over 6 seconds for a tiny file. Lambda gives CPU in proportion to memory, so 128 MB is very CPU-limited while loading the AWS SDK. The next experiment would compare 256 MB and module-level client creation. Because billing is per GB-second, more memory can be both faster and about the same cost. That experiment hasn't been run, so no improvement is claimed.
 
-**How it was deployed:** the build workspace had no internet access, so instead of `sam deploy` the same steps were done through the AWS API: the Lambda zip was uploaded to a private artifacts bucket and verified by MD5, then a CloudFormation change set (with the SAM transform) was created, reviewed, and executed.
+**How it was deployed:** the Lambda package was uploaded to a private artifacts bucket (integrity checked by MD5), then a CloudFormation change set with the SAM transform was created, reviewed, and executed. These are the same steps `sam deploy` performs.

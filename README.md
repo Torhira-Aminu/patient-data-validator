@@ -65,4 +65,6 @@ See **[architecture, design decisions, failure handling, security limitations an
 
 **Verified in AWS on 2026-11-09:** uploading synthetic CSVs to `incoming/` automatically triggered Lambda, which wrote the expected JSON reports (3 valid / 2 invalid; bad file rejected). The stack was then torn down. Details and the honest performance finding are in [docs/AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md#verified-results-2026-11-09-us-east-1); raw evidence is in `docs/evidence/`. Never upload real patient information.
 
-Starter code generated with ChatGPT; reviewed, fixed and extended with Claude's assistance.
+## Author
+
+Torhira Aminu
