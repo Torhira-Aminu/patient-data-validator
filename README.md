@@ -54,4 +54,9 @@ P005: Valid
 Four automated tests check valid records, missing IDs, invalid ages, and invalid blood pressure values.
 
 All data is synthetic. Validation ranges are illustrative, not clinical guidelines.
-  
+
+## AWS serverless extension — deployment pending
+
+An additional `template.yaml` deploys an **S3 → AWS Lambda → S3** flow using AWS SAM and CloudFormation. Uploading a synthetic CSV under `incoming/` triggers a Python validation function; output JSON is saved under `reports/`. See [AWS deployment and verification](docs/AWS_DEPLOYMENT.md) and [Lambda handler](cloud/lambda_handler.py).
+
+**This is source code only until verified in an AWS account.** Unit tests mock/local-run the validation logic; do not claim a successful cloud deployment from these alone. Never upload real patient information or AWS credentials.
