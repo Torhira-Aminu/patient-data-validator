@@ -1,41 +1,59 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Serverless CSV validation prototype (synthetic data only)
+Description: >
+  Serverless CSV validation prototype (synthetic data only).
+  S3 upload under incoming/ triggers Lambda, which writes a JSON report under reports/.
+
+Parameters:
+  ReservedConcurrency:
+    Type: Number
+    Default: -1
+    Description: >
+      Max concurrent Lambda executions (cost/runaway guard). -1 = do not reserve.
+      New AWS accounts often have a total limit of 10, which cannot be reserved from,
+      so leave -1 unless your account limit is higher.
+  RetentionDays:
+    Type: Number
+    Default: 30
+    AllowedValues: [1, 3, 5, 7, 14, 30]
+    Description: Days to keep uploaded CSVs, reports, and Lambda logs before automatic deletion.
+
+Conditions:
+  UseReservedConcurrency: !Not [!Equals [!Ref ReservedConcurrency, -1]]
+
+# The bucket name is built from the stack name + account ID instead of using !Ref DataBucket
+# inside the function's policy. Referencing the bucket from the function while the bucket's
+# notification references the function creates a CloudFormation circular dependency, which
+# made the original template fail to deploy. Stack names must be lowercase for this reason.
 Resources:
   DataBucket:
     Type: AWS::S3::Bucket
+    DependsOn: ValidatorFunctionS3Permission
     Properties:
+      BucketName: !Sub "${AWS::StackName}-data-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-  ValidatorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: .
-      Handler: cloud.lambda_handler.lambda_handler
-      Runtime: python3.12
-      Timeout: 30
-      MemorySize: 128
-      Environment:
-        Variables:
-          BUCKET_NAME: !Ref DataBucket
-      Policies:
-        - S3ReadPolicy:
-            BucketName: !Ref DataBucket
-        - S3WritePolicy:
-            BucketName: !Ref DataBucket
-      Events:
-        CsvUploaded:
-          Type: S3
-          Properties:
-            Bucket: !Ref DataBucket
-            Events: s3:ObjectCreated:*
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireDemoObjects
+            Status: Enabled
+            ExpirationInDays: !Ref RetentionDays
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Function: !GetAtt ValidatorFunction.Arn
             Filter:
               S3Key:
                 Rules:
@@ -43,8 +61,77 @@ Resources:
                     Value: incoming/
                   - Name: suffix
                     Value: .csv
+
+  DataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DataBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt DataBucket.Arn
+              - !Sub "${DataBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  ValidatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-validator"
+      CodeUri: .
+      Handler: cloud.lambda_handler.lambda_handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      Timeout: 30
+      MemorySize: 128
+      ReservedConcurrentExecutions: !If [UseReservedConcurrency, !Ref ReservedConcurrency, !Ref AWS::NoValue]
+      LoggingConfig:
+        LogGroup: !Ref ValidatorLogGroup
+      EventInvokeConfig:
+        MaximumRetryAttempts: 1
+        MaximumEventAgeInSeconds: 3600
+      Environment:
+        Variables:
+          BUCKET_NAME: !Sub "${AWS::StackName}-data-${AWS::AccountId}"
+      # Least privilege: read only incoming/, write only reports/. No delete, no ACL, no list.
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: ReadUploadedCsv
+              Effect: Allow
+              Action: s3:GetObject
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-data-${AWS::AccountId}/incoming/*"
+            - Sid: WriteReports
+              Effect: Allow
+              Action: s3:PutObject
+              Resource: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-data-${AWS::AccountId}/reports/*"
+
+  ValidatorFunctionS3Permission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ValidatorFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:${AWS::Partition}:s3:::${AWS::StackName}-data-${AWS::AccountId}"
+
+  ValidatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-validator"
+      RetentionInDays: !Ref RetentionDays
+
 Outputs:
   DataBucketName:
+    Description: Upload synthetic CSVs to s3://<this>/incoming/
     Value: !Ref DataBucket
   ValidatorFunctionName:
     Value: !Ref ValidatorFunction
+  ValidatorLogGroupName:
+    Value: !Ref ValidatorLogGroup

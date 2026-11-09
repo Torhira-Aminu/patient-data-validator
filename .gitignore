@@ -15,3 +15,7 @@ __pycache__/
 # Environment and secrets
 .env
 .env.*
+
+# SAM build output
+.aws-sam/
+samconfig.toml

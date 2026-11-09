@@ -17,14 +17,14 @@ This project demonstrates data quality assurance through automated validation. I
 - Reads patient records from a CSV file
 - Validates patient IDs, ages, and blood pressure values
 - Identifies invalid records and displays errors
-- Includes four automated pytest tests
+- Includes 16 automated pytest tests
 
 ## How to Run
 
-Install pytest:
+Install development dependencies:
 
 ```bash
-python -m pip install pytest
+python -m pip install -r requirements-dev.txt
 ```
 
 Run the validator:
@@ -51,12 +51,20 @@ P005: Valid
 
 ## Testing
 
-Four automated tests check valid records, missing IDs, invalid ages, and invalid blood pressure values.
+16 automated tests: 4 for the core validation rules (`test_validator.py`) and 12 for the CSV parser and Lambda handler (`tests/test_cloud_handler.py`), using a fake S3 client so no AWS calls are made.
 
 All data is synthetic. Validation ranges are illustrative, not clinical guidelines.
 
-## AWS serverless extension — deployment pending
+## AWS serverless extension — deployed and verified
 
-An additional `template.yaml` deploys an **S3 → AWS Lambda → S3** flow using AWS SAM and CloudFormation. Uploading a synthetic CSV under `incoming/` triggers a Python validation function; output JSON is saved under `reports/`. See [AWS deployment and verification](docs/AWS_DEPLOYMENT.md) and [Lambda handler](cloud/lambda_handler.py).
+`template.yaml` (AWS SAM → CloudFormation) deploys an **S3 → Lambda → S3** pipeline: uploading a synthetic CSV under `incoming/` triggers a Python Lambda that writes a JSON validation report under `reports/` (or `reports/<name>.error.json` for unusable files).
 
-**This is source code only until verified in an AWS account.** Unit tests mock/local-run the validation logic; do not claim a successful cloud deployment from these alone. Never upload real patient information or AWS credentials.
+Highlights: least-privilege IAM (read `incoming/*`, write `reports/*` only), HTTPS-only bucket policy, public access blocked, encryption at rest, 30-day data and log expiry, one automatic retry for transient errors.
+
+See **[architecture, design decisions, failure handling, security limitations and deploy steps](docs/AWS_DEPLOYMENT.md)**.
+
+**Verified in AWS on 2026-11-09:** uploading synthetic CSVs to `incoming/` automatically triggered Lambda, which wrote the expected JSON reports (3 valid / 2 invalid; bad file rejected). The stack was then torn down. Details and the honest performance finding are in [docs/AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md#verified-results-2026-11-09-us-east-1); raw evidence is in `docs/evidence/`. Never upload real patient information.
+
+## Author
+
+Torhira Aminu
