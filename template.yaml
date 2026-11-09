@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless CSV validation prototype (synthetic data only)
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  ValidatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: cloud.lambda_handler.lambda_handler
+      Runtime: python3.12
+      Timeout: 30
+      MemorySize: 128
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref DataBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DataBucket
+        - S3WritePolicy:
+            BucketName: !Ref DataBucket
+      Events:
+        CsvUploaded:
+          Type: S3
+          Properties:
+            Bucket: !Ref DataBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: incoming/
+                  - Name: suffix
+                    Value: .csv
+Outputs:
+  DataBucketName:
+    Value: !Ref DataBucket
+  ValidatorFunctionName:
+    Value: !Ref ValidatorFunction
