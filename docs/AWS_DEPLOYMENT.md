@@ -1,6 +1,6 @@
 # Serverless CSV validator — architecture and deployment
 
-**Status:** template and code tested locally; **live AWS deployment not yet verified.** Evidence goes in `docs/evidence/` only after a real run. Synthetic data only.
+**Status:** deployed and verified in AWS (us-east-1) on 2026-11-09, then torn down. Evidence: [`docs/evidence/deployment_run_2026-11-09.json`](evidence/deployment_run_2026-11-09.json). Synthetic data only.
 
 ## Architecture
 
@@ -84,9 +84,19 @@ sam delete --stack-name pdv-demo --region us-east-1
 
 `--resolve-s3` also creates a small SAM artifacts bucket (`aws-sam-cli-managed-default`); it can be left (pennies) or deleted from the CloudFormation console.
 
-## Résumé evidence checklist
-- [ ] Stack deployed; outputs saved (redacted)
-- [ ] `patients.csv` upload produced `reports/patients.json`
-- [ ] `bad_columns.csv` produced `reports/bad_columns.error.json`
-- [ ] CloudWatch log lines captured
-- [ ] Stack deleted and confirmed gone
+## Verified results (2026-11-09, us-east-1)
+
+| Check | Result |
+|---|---|
+| CloudFormation change set | 7 resources to add, 0 modified; SAM transform succeeded with no circular dependency |
+| Stack status | `CREATE_COMPLETE` |
+| `incoming/patients.csv` (5 synthetic rows) | Lambda triggered automatically; `reports/patients.json` written about 8 s after upload: 3 valid, 2 invalid (P003 age, P004 blood pressure), matching local tests |
+| `incoming/bad_columns.csv` | Lambda triggered; `reports/bad_columns.error.json` with `status: rejected` and the missing-column reason |
+| Deployed IAM role | Inline: `s3:GetObject` on `incoming/*`, `s3:PutObject` on `reports/*`; managed: `AWSLambdaBasicExecutionRole` (logging) |
+| CloudWatch Logs | `Report written ... total=5 invalid=2` and `Rejected ... missing: blood_pressure` |
+| Lambda runtime (cold starts) | 6,433 ms and 6,744 ms, 94–95 MB of 128 MB used |
+| Teardown | Test objects deleted, stack deleted, no functions remain |
+
+**Performance finding (not hidden):** both runs were cold starts and took over 6 seconds for a tiny file. Lambda gives CPU in proportion to memory, so 128 MB is very CPU-limited while loading the AWS SDK. The next experiment would compare 256 MB and module-level client creation. Because billing is per GB-second, more memory can be both faster and about the same cost. That experiment hasn't been run, so no improvement is claimed.
+
+**How it was deployed:** the build workspace had no internet access, so instead of `sam deploy` the same steps were done through the AWS API: the Lambda zip was uploaded to a private artifacts bucket and verified by MD5, then a CloudFormation change set (with the SAM transform) was created, reviewed, and executed.

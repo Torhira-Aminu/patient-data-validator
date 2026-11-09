@@ -55,7 +55,7 @@ P005: Valid
 
 All data is synthetic. Validation ranges are illustrative, not clinical guidelines.
 
-## AWS serverless extension — deployment pending verification
+## AWS serverless extension — deployed and verified
 
 `template.yaml` (AWS SAM → CloudFormation) deploys an **S3 → Lambda → S3** pipeline: uploading a synthetic CSV under `incoming/` triggers a Python Lambda that writes a JSON validation report under `reports/` (or `reports/<name>.error.json` for unusable files).
 
@@ -63,6 +63,6 @@ Highlights: least-privilege IAM (read `incoming/*`, write `reports/*` only), HTT
 
 See **[architecture, design decisions, failure handling, security limitations and deploy steps](docs/AWS_DEPLOYMENT.md)**.
 
-**Not yet verified in AWS.** Evidence will appear in `docs/evidence/` only after a real deployment. Never upload real patient information.
+**Verified in AWS on 2026-11-09:** uploading synthetic CSVs to `incoming/` automatically triggered Lambda, which wrote the expected JSON reports (3 valid / 2 invalid; bad file rejected). The stack was then torn down. Details and the honest performance finding are in [docs/AWS_DEPLOYMENT.md](docs/AWS_DEPLOYMENT.md#verified-results-2026-11-09-us-east-1); raw evidence is in `docs/evidence/`. Never upload real patient information.
 
 Starter code generated with ChatGPT; reviewed, fixed and extended with Claude's assistance.

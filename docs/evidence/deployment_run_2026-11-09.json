@@ -1,0 +1,46 @@
+{
+  "captured_at_utc": "2026-11-09T01:18:06+00:00",
+  "region": "us-east-1",
+  "account": "********5180",
+  "deployment": {
+    "method": "CloudFormation change set (SAM transform) created and executed through the AWS MCP connector; Lambda zip uploaded to a private artifacts bucket and verified by MD5 (36157cdebfd88b95fd8f7c2ca2da48ee)",
+    "stack": "pdv-demo",
+    "change_set_resources": ["AWS::S3::Bucket", "AWS::S3::BucketPolicy", "AWS::IAM::Role", "AWS::Lambda::Function", "AWS::Lambda::Permission", "AWS::Lambda::EventInvokeConfig", "AWS::Logs::LogGroup"],
+    "stack_status": "CREATE_COMPLETE",
+    "outputs": {"DataBucketName": "pdv-demo-data-****5180", "ValidatorFunctionName": "pdv-demo-validator", "ValidatorLogGroupName": "/aws/lambda/pdv-demo-validator"},
+    "function": {"runtime": "python3.12", "architecture": "arm64", "memory_mb": 128, "timeout_s": 30}
+  },
+  "deployed_iam_policy": {
+    "managed": ["AWSLambdaBasicExecutionRole"],
+    "inline": [
+      {"Sid": "ReadUploadedCsv", "Action": "s3:GetObject", "Resource": "arn:aws:s3:::pdv-demo-data-****5180/incoming/*"},
+      {"Sid": "WriteReports", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::pdv-demo-data-****5180/reports/*"}
+    ]
+  },
+  "test_runs": [
+    {
+      "input": "incoming/patients.csv (synthetic, 5 rows)",
+      "uploaded_at_utc": "2026-11-09T01:17:57+00:00",
+      "report_key": "reports/patients.json",
+      "report_last_modified_utc": "2026-11-09T01:18:05+00:00",
+      "report_summary": {"status": "processed", "total": 5, "valid": 3, "invalid": 2},
+      "invalid_records": [{"line": 4, "patient_id": "P003", "issues": ["Invalid age"]}, {"line": 5, "patient_id": "P004", "issues": ["Invalid blood pressure"]}],
+      "lambda_report": {"duration_ms": 6432.88, "billed_ms": 6507, "max_memory_mb": 94, "init_ms": 73.23, "cold_start": true}
+    },
+    {
+      "input": "incoming/bad_columns.csv (synthetic, wrong columns)",
+      "uploaded_at_utc": "2026-11-09T01:17:57+00:00",
+      "report_key": "reports/bad_columns.error.json",
+      "report_last_modified_utc": "2026-11-09T01:18:06+00:00",
+      "report_summary": {"status": "rejected", "error": "CSV requires patient_id, age, blood_pressure columns; missing: blood_pressure"},
+      "lambda_report": {"duration_ms": 6744.18, "billed_ms": 6838, "max_memory_mb": 95, "init_ms": 93.23, "cold_start": true}
+    }
+  ],
+  "cloudwatch_log_excerpt": [
+    "[INFO] Report written key=reports/patients.json total=5 invalid=2",
+    "[WARNING] Rejected key=incoming/bad_columns.csv reason=CSV requires patient_id, age, blood_pressure columns; missing: blood_pressure"
+  ],
+  "observations": [
+    "Both invocations were cold starts; ~6.4-6.7 s each at 128 MB with 94-95 MB peak memory. Lambda allocates CPU in proportion to memory, so the SDK import/client creation is slow at 128 MB. Recommended next step: measure at 256 MB and create the S3 client at module load. Not yet measured."
+  ]
+}
